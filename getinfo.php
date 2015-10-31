@@ -19,59 +19,6 @@
     $s_lon = $s_data->station[0]->lon;
     $s_lat = $s_data->station[0]->lat;
 
-    // ぐるなびAPIで店を検索
-    require("config.php");
-    $uri = "http://api.gnavi.co.jp/RestSearchAPI/20150630/";
-    $acckey = $key_id;
-    $format = "json";
-    $s_show = 500;
-    $s_range = 3;
-    $_input_mode = 2;
-    $s_mode = 2;
-
-    //$url = "http://api.gnavi.co.jp/RestSearchAPI/20150630/?keyid=" .$acckey. "&latitude=" .$s_lat. "&longitude=" .$s_lon. "& range=3&hit_per_page=" .&s_show. "&format=json";
-    //var_dump($url)
-
-    // APIに渡す引数を指定
-    $url = sprintf("%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s", $uri, "?format=", $format, "&keyid=", $acckey, "&latitude=", $s_lat,"&longitude=",$s_lon,"&range=",$s_range,"&hit_per_page=",$s_show,"&input_coordinates_mode=",$_input_mode,"&coordinates_mode=",$s_mode);
-    //$url = sprintf("%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s", $uri, "?format=", $format, "&keyid=", $acckey, "&latitude=", $s_lat,"&longitude=",$s_lon,"&range=",$s_range,"&input_coordinates_mode=",$_input_mode,"&coordinates_mode=",$s_mode);
-    //var_dump($url);    
-
-    // APIからデータを取得
-    $json_data = file_get_contents($url, true);
-    //var_dump($json_data);
-
-    $d_data = json_decode($json_data);
-    //var_dump($d_data);
-
-    $s_name[] = null;
-    $s_lat[] = null;
-    $s_lon[] = null;
-    $s_urllist[] = null;
-    //$s_count = $d_data->total_hit_count;
-
-    $hit_count = $d_data->total_hit_count;
-    //var_dump($shop_count);
-
-    if($hit_count < $s_show){
-        $s_count = $hit_count;
-    }
-    else{
-        $s_count = $s_show;
-    }
-
-    // 選択した駅周辺のお店の名前、緯度経度、URL情報を配列にて管理
-    for($i=0; $i < $s_count; $i++){
-        $s_name[$i]=$d_data->rest[$i]->name;
-        $s_lat[$i]=$d_data->rest[$i]->latitude;
-        $s_lon[$i]=$d_data->rest[$i]->longitude;
-        $s_urllist[$i]=$d_data->rest[$i]->url;
-        //var_dump($s_name[$i]);
-        //var_dump($s_lat[$i]);
-        //var_dump($s_lon[$i]);
-        //var_dump($d_data->rest[$i]->name);
-        //var_dump($d_data->rest[$i]->address);
-    }
 ?>
 
 <html lang="ja">
@@ -102,59 +49,67 @@
                 // ライン名、駅名の情報をHTML上に表示
                 document.getElementById("line_name").innerHTML = line_name;
                 document.getElementById("station_name").innerHTML = station_name;
-                                
+
                 // 選択した駅の緯度経度の情報取得
                 var lat = <?php print $s_lat ?>;
                 var lon = <?php print $s_lon ?>;
-                
+
                 // 選択した駅周辺情報をマップに表示
                 var map = new google.maps.Map(
                     document.getElementById("myGoogleMap"),{
                         zoom: 16,
                         center: new google.maps.LatLng(lat, lon),
-                        //center: new google.maps.LatLng(36, 135),
                         mapTypeId: google.maps.MapTypeId.ROADMAP
                     }
                 );
-                
+
                 if(!navigator.geolocation){
                     return;
                 }
+
+                // クラスからぐるなびの情報を取得する。
+                <?php 
+                    require("./class_define.php");
+                    $get_shop_param = new get_shopinformation();
+                    $result = $get_shop_param->get_parameter($s_lat, $s_lon);
+                ?>
                 
-                var ss_name = <?php print json_encode($s_name); ?>;
-                var ss_lat = <?php print json_encode($s_lat); ?>;
-                var ss_lon = <?php print json_encode($s_lon); ?>;
-                var ss_url = <?php print json_encode($s_urllist); ?>;
-                var s_count = <?php print $s_count; ?>;
-                                
+                // クラスから取得した値をjson encodeする。
+                var shop_data = <?php print json_encode($result, true); ?>;              
+
+                if(shop_data.total_hit_count > 500){
+                    var shop_count = 500;
+                }
+                else{
+                    var shop_count = shop_data.total_hit_count;
+                }
+                
+                
                 // 選択した駅周辺のお店をMakerにて表示
-                for(var i=0; i < s_count; i++){
-                    var sp_name = ss_name[i];
-                    var sp_lat = ss_lat[i];
-                    var sp_lon = ss_lon[i];
-                    var sp_url = ss_url[i];
-                    
+                for(var i=0; i < shop_count; i++){                
+                //for(var i=0; i < shop_data.total_hit_count; i++){
+                    var sp_name = shop_data.rest[i].name;
+                    var sp_lat = shop_data.rest[i].latitude;
+                    var sp_lon = shop_data.rest[i].longitude;
+                    var sp_url = shop_data.rest[i].url;
+                    var sp_image_url = shop_data.rest[i].image_url.shop_image1;
+                    var sp_address = shop_data.rest[i].address;
+
                     var currentPosition = new google.maps.LatLng(sp_lat, sp_lon);
 
                     // 新規にマーカーを表示する
-                    /*
-                    if (marker){
-                        marker.setMap(null);	// マーカーを削除
-                    }
-                    */
                     marker = new google.maps.Marker({
                         position: currentPosition,
                         title: sp_name,
                         map: map
                     });
-                    
-                    //クリックしたら指定したurlに遷移するイベント
+
+                    // クリックしたら指定したurlに遷移するイベント
                     google.maps.event.addListener(marker, 'click', (function(url){
                             return function(){location.href = url;};
                     })(sp_url));
-                    
                 }
-                    
+
             });
         </script>
 
@@ -180,7 +135,8 @@
                     </td>
                 </tr>
             </table>
-            <div id="myGoogleMap"  style="width:100%; height:90%; border: 1px solid black;">
+                                    
+            <div id="myGoogleMap" style="width:100%; height:90%; border: 1px solid black;">
             </div>
         </div>
     </body>
